@@ -1,56 +1,63 @@
-project('redboard_adc_experiment', 'c',
-  default_options: ['b_lto=false', 'b_staticpic=false'],
+project('redboard_adc_example', 'c',
+  default_options: [
+    'b_lto=true',
+    'b_staticpic=false',
+    'c_std=c2x',
+    'warning_level=3',
+  ],
   license: ['Apache-2.0'],
   version: '0.1.0')
 
-lib = dependency('rba_atp')
-
 c_args = [
-  '-DAM_CUSTOM_BDADDR', '-DAM_PACKAGE_BGA', '-DWSF_TRACE_ENABLED',
-  '-DWSF_TRACE_ENABLED', '-DWSF_TRACE_ENABLED', '-DAM_PART_APOLLO3',
-  '-DPART_APOLLO3', '-mthumb', '-mcpu=cortex-m4', '-mfpu=fpv4-sp-d16',
-  '-mfloat-abi=hard', '-std=c17', '-ffunction-sections', '-Wall', '-Wextra',
-  '-pedantic',
+  '-ffunction-sections',
 ]
 
 link_args = [
-  '--specs=nosys.specs', '--specs=nano.specs', '-mthumb',
-  '-mcpu=cortex-m4', '-mfpu=fpv4-sp-d16', '-mfloat-abi=hard', '-nostartfiles',
-  '-static', '-Wl,--gc-sections', '-fno-exceptions'
+  '-Wl,--gc-sections', '-fno-exceptions',
 ]
 
-sources = files([
-  'src/main.c',
-  'src/uart.c',
-  'src/adc.c',
-])
 
-includes = include_directories([
-  'include',
-])
+# Find libm...
+cc = meson.get_compiler('c', native: false)
+m_dep = cc.find_library('m', required : false)
 
-exe = executable(meson.project_name(),
-  sources,
-  dependencies: [lib],
-  include_directories: includes,
-  c_args: c_args,
-  link_args: link_args + ['-T' + meson.source_root() / 'linker.ld']
-)
+system = 'none'
+cpu_family = 'arm'
+cpu = 'cortex-m4'
+endian = 'little'
 
-objcopy = find_program('objcopy')
+# Only create the executable if the target is something resembling the RedBoard
+if (host_machine.system() == 'none' and host_machine.cpu_family() == 'arm' and
+    host_machine.cpu() == 'cortex-m4')
+  # Executable
+  sources = files([
+    'src/main.c',
+  ])
 
-bin = custom_target(meson.project_name() + '.bin',
-  input : exe,
-  output : meson.project_name() + '.bin',
-  command : [objcopy, '-O', 'binary',
-    '@INPUT@', '@OUTPUT@',
-  ],
-  build_by_default: true
-)
+  ambiq_lib = dependency('ambiq_rba_atp')
+  asimple_lib = dependency('asimple_rba_atp')
 
-run_target('flash',
-  command : ['python3', meson.source_root() / 'svl.py',
-    get_option('tty'), '-f',  meson.project_name() + '.bin',
-    '-b', '921600', '-v'],
-  depends : bin,
-)
+  exe = executable(meson.project_name(),
+    sources,
+    dependencies: [ambiq_lib, m_dep, asimple_lib],
+    c_args: c_args,
+    link_args: link_args + ['-T' + meson.source_root() / 'linker.ld']
+  )
+
+  # Custom flash target, to make it easier to program the RedBoard, requires
+  # objcopy
+  objcopy = find_program('objcopy')
+
+  bin = custom_target(
+    input : exe,
+    output : exe.name().split('.')[0] + '.bin',
+    command : [objcopy, '-O', 'binary', '@INPUT@', '@OUTPUT@', ],
+    build_by_default: true
+  )
+
+  run_target('flash',
+    command : ['python3', meson.source_root() / 'svl.py',
+      get_option('tty'), '-f',  bin, '-b', '921600', '-v'],
+    depends : bin,
+  )
+endif

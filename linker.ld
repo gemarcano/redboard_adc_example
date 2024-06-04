@@ -26,6 +26,13 @@ SECTIONS
     KEEP(*(.init_array*))
     __init_array_end = .;
 
+    __fini_array_start = .;
+    KEEP(*(.fini_array*))
+    __fini_array_end = .;
+
+    KEEP(*(.init))
+    KEEP(*(.fini))
+
     /* .rodata */
     . = ALIGN(4);
     *(.rodata)
@@ -77,7 +84,7 @@ SECTIONS
   /* purpose is to place padding between initial (empty) stack and heap */
   .dmz (NOLOAD):
   {
-    . = ORIGIN(sram) + LENGTH(sram) - 8; /* Automatically give the rest of the space in sram to the stack */
+    . = ORIGIN(sram) + LENGTH(sram); /* Automatically give the rest of the space in sram to the stack */
     . = ALIGN(8);
   }
 
